@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forja 3D Pro - V3.5</title>
+    <style>
+        :root { 
+            --bg: #f4f4f9; --card: #ffffff; --border: #ddd; --purple: #8B5CF6; 
+            --text: #121212; --green: #00E676; --boxbg: #e0e0e0; --muted: #666;
+        }
+        body.dark { 
+            --bg: #121212; --card: #1b1b1b; --border: #2f2f2f; --text: #ffffff; 
+            --boxbg: #262626; --muted: #a0a0a0;
+        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: 0.2s; }
+        body { background: var(--bg); color: var(--text); padding: 15px; }
+        .container { max-width: 600px; margin: auto; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: var(--purple); margin: 0 0 10px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        label { display: block; font-size: 0.85rem; margin-bottom: 5px; color: var(--muted); }
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+        .det-linha { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        .price-big { font-size: 2.2rem; font-weight: bold; color: var(--purple); text-align: center; margin: 10px 0; }
+        .btn-acao { border: none; padding: 15px; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+        <h1>🔥 FORJA 3D</h1>
+        <button onclick="toggleTheme()" style="padding:10px; border-radius:8px; border:none; cursor:pointer;">🌓 Tema</button>
+    </div>
+
+    <div class="card">
+        <h2>📦 Produto</h2>
+        <input id="prodNome" placeholder="Nome do Produto">
+        <div class="row" style="margin-top:10px">
+            <div><label>Cores</label><input id="cores" placeholder="Ex: Azul, Branco"></div>
+            <div><label>Tamanho/Diam.</label><input id="tamanho" placeholder="Ex: 10cm"></div>
+        </div>
+        <label style="margin-top:10px">Tipo de Filamento</label>
+        <select id="tipoFil" onchange="saveBase()"><option>PLA</option><option>PETG</option><option>TPU</option><option>ABS</option></select>
+        <div style="margin-top:15px">
+            <input type="checkbox" id="isLote" onchange="calc()"> <label style="display:inline" for="isLote">Produzir várias peças</label>
+            <input type="number" id="qtd" value="1" placeholder="Quantidade" oninput="calc()" class="hidden" style="margin-top:10px; display:none">
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>⚙️ Produção</h2>
+        <div class="row">
+            <div><label>Filamento (R$/kg)</label><input id="filPreco" type="number" oninput="saveBase()"></div>
+            <div><label>Peso (g)</label><input id="peso" type="number" oninput="calc()"></div>
+            <div><label>Horas</label><input id="horas" type="number" oninput="calc()"></div>
+            <div><label>Minutos</label><input id="minutos" type="number" oninput="calc()"></div>
+            <div><label>Energia (R$/kWh)</label><input id="energia" type="number" oninput="saveBase()"></div>
+            <div><label>Margem (%)</label><input id="margem" type="number" oninput="saveBase()"></div>
+            <div><label>Perdas (%)</label><input id="perdas" type="number" oninput="saveBase()"></div>
+            <div><label>Comodato (%)</label><input id="comodato" type="number" oninput="calc()" placeholder="0"></div>
+            <div><label>Acabamento (min)</label><input id="acab" type="number" oninput="calc()"></div>
+            <div><label>Valor Hora (R$)</label><input id="vHora" type="number" oninput="saveBase()"></div>
+            <div style="grid-column: span 2;"><label>Outros Custos (R$)</label><input id="outros" type="number" oninput="calc()"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>💰 Resultado Detalhado</h2>
+        <div id="listaResultado"></div>
+        <div id="vDireta" class="price-big">R$ 0,00</div>
+    </div>
+
+    <div class="card">
+        <button class="btn-acao" style="background:var(--purple)" onclick="share(true)">📤 Compartilhar Equipe</button>
+        <button class="btn-acao" style="background:var(--green); color:black" onclick="share(false)">🟢 Compartilhar Cliente</button>
+        <button class="btn-acao" style="background:#ff5252" onclick="limpar()">🗑 Novo Cálculo</button>
+    </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let lastCalc = {};
+
+function toggleTheme() { document.body.classList.toggle('dark'); }
+
+function saveBase(){
+    const baseFields = ["tipoFil", "filPreco", "energia", "margem", "perdas", "vHora"];
+    baseFields.forEach(f => localStorage.setItem("f3d_"+f, $(f).value));
+    calc();
+}
+
+function loadBase(){
+    const baseFields = ["tipoFil", "filPreco", "energia", "margem", "perdas", "vHora"];
+    baseFields.forEach(f => {
+        let val = localStorage.getItem("f3d_"+f);
+        if(val) $(f).value = val;
+    });
+}
+
+function calc(){
+    let qtd = $("isLote").checked ? (+$("qtd").value || 1) : 1;
+    $("qtd").style.display = $("isLote").checked ? "block" : "none";
+    
+    let h = (+$("horas").value||0) + ((+$("minutos").value||0)/60);
+    let cMat = (+$("filPreco").value/1000) * (+$("peso").value||0);
+    let cEn = h * 0.11 * (+$("energia").value||0);
+    let cAc = (+$("acab").value/60) * (+$("vHora").value||0);
+    let cOut = (+$("outros").value||0);
+    let perdasVal = (cMat + cEn + cAc + cOut) * (+$("perdas").value/100);
+    let totalCustos = (cMat + cEn + cAc + cOut + perdasVal);
+    
+    let precoVenda = totalCustos * (1 + (+$("margem").value/100));
+    let comodatoPct = (+$("comodato").value||0);
+    let descVal = precoVenda * (comodatoPct/100);
+    let precoComodato = precoVenda - descVal;
+
+    lastCalc = { cMat, cEn, cAc, cOut, perdasVal, totalCustos, precoVenda, comodatoPct, descVal, precoComodato, qtd };
+
+    let html = `
+        <div class="det-linha"><span>Custo Material:</span><span>R$ ${cMat.toFixed(2)}</span></div>
+        <div class="det-linha"><span>Energia:</span><span>R$ ${cEn.toFixed(2)}</span></div>
+        <div class="det-linha"><span>Acabamento:</span><span>R$ ${cAc.toFixed(2)}</span></div>
+        <div class="det-linha"><span>Outros Custos:</span><span>R$ ${cOut.toFixed(2)}</span></div>
+        <div class="det-linha"><span>Perdas:</span><span>R$ ${perdasVal.toFixed(2)}</span></div>
+        <div class="det-linha" style="font-weight:bold;"><span>Total de Custos:</span><span>R$ ${totalCustos.toFixed(2)}</span></div>
+        <div class="det-linha"><span>Margem Aplicada:</span><span>R$ ${(precoVenda - totalCustos).toFixed(2)}</span></div>
+        <div class="det-linha"><span><b>Valor de Venda Direta:</b></span><span><b>R$ ${precoVenda.toFixed(2)}</b></span></div>`;
+    
+    if(comodatoPct > 0){
+        html += `<div class="det-linha" style="color:var(--purple)"><span>Desconto Comodato (${comodatoPct}%):</span><span>- R$ ${descVal.toFixed(2)}</span></div>
+                 <div class="det-linha"><span><b>Valor p/ Comodato:</b></span><span><b>R$ ${precoComodato.toFixed(2)}</b></span></div>`;
+    }
+
+    $("listaResultado").innerHTML = html;
+    $("vDireta").innerText = "R$ " + (comodatoPct > 0 ? precoComodato.toFixed(2) : precoVenda.toFixed(2));
+}
+
+function share(equipe){
+    let finalVal = (lastCalc.comodatoPct > 0 ? lastCalc.precoComodato : lastCalc.precoVenda);
+    let txt = equipe 
+        ? `🔥 FORJA 3D\nNome do produto: ${$("prodNome").value}\nCores: ${$("cores").value} | Tamanho: ${$("tamanho").value}\nPeso: ${$("peso").value}g | Tempo: ${$("horas").value}h ${$("minutos").value}min\nQuantidade: ${lastCalc.qtd}\nCusto Total: R$ ${lastCalc.totalCustos.toFixed(2)}\nValor Venda Direta: R$ ${lastCalc.precoVenda.toFixed(2)}` 
+        : `🔥 FORJA 3D\nNome do produto: ${$("prodNome").value}\nCores: ${$("cores").value} | Tamanho: ${$("tamanho").value}\nQuantidade: ${lastCalc.qtd}`;
+    
+    if(lastCalc.comodatoPct > 0) {
+        txt += `\nDesconto Comodato: ${lastCalc.comodatoPct}% (R$ ${lastCalc.descVal.toFixed(2)})`;
+    }
+    txt += `\nValor Final: R$ ${finalVal.toFixed(2)}`;
+    
+    navigator.clipboard.writeText(txt);
+    alert("Dados copiados!");
+}
+
+function limpar(){ location.reload(); }
+
+loadBase();
+calc();
+</script>
+</body>
+</html>
